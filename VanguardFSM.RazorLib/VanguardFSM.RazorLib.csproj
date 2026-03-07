@@ -15,4 +15,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\VanguardFSM.Shared\VanguardFSM.Shared.csproj" />
+  </ItemGroup>
+
 </Project>

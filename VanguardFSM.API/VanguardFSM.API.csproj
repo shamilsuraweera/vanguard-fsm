@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\VanguardFSM.Shared\VanguardFSM.Shared.csproj" />
+    <ProjectReference Include="..\VanguardFSM.RazorLib\VanguardFSM.RazorLib.csproj" />
   </ItemGroup>
 
 </Project>
