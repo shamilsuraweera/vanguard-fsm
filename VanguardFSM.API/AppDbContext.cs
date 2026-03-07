@@ -12,12 +12,12 @@ public class AppDbContext : DbContext
 
 protected override void OnModelCreating(ModelBuilder modelBuilder)
 {
-    // A test task in London (using Longitude, Latitude)
     modelBuilder.Entity<TaskItem>().HasData(
         new TaskItem { 
             Id = 1, 
             Title = "Repair AC - Customer A", 
-            IsCompleted = false,
+            Description = "Standard maintenance and filter change.", // New field
+            Status = VanguardFSM.Shared.Enums.ServiceStatus.Incoming, // Replaced IsCompleted
             Location = new NetTopologySuite.Geometries.Point(-0.1278, 51.5074) { SRID = 4326 } 
         }
     );
