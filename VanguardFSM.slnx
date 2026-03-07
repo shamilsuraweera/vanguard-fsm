@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="VanguardFSM.API/VanguardFSM.API.csproj" />
+  <Project Path="VanguardFSM.Shared/VanguardFSM.Shared.csproj" />
+</Solution>

@@ -1,0 +1,6 @@
+@VanguardFSM.API_HostAddress = http://localhost:5085
+
+GET {{VanguardFSM.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
