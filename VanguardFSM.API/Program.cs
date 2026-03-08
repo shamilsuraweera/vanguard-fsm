@@ -1,5 +1,7 @@
 using VanguardFSM.API.Data;
 using Microsoft.EntityFrameworkCore;
+using VanguardFSM.API.Hubs;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
@@ -8,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // 1. Add services to the container.
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(); // This generates the JSON
 
@@ -65,7 +68,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Enable authorization
 app.UseAuthorization();
+
+// Map the Hub to a specific URL
+app.MapHub<NotificationHub>("/notificationHub");
+
+// Map the controllers
 app.MapControllers();
 
 app.Run();
