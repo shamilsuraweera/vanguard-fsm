@@ -27,10 +27,10 @@ public async Task<IActionResult> GetSuggestedWorkers(int taskId, double radiusIn
     // 2. Query SQL Server for workers within the radius
     // This is where the 'Smart' part happens!
     var nearbyWorkers = await _context.Users
-        .Where(u => u.Role == "Worker" && u.IsAvailable)
-        .Where(u => u.LastKnownLocation.Distance(task.Location) <= radiusInMeters)
-        .OrderBy(u => u.LastKnownLocation.Distance(task.Location))
-        .ToListAsync();
+    .Where(u => u.Role == "Worker" && u.IsAvailable && u.LastKnownLocation != null) // Add null check
+    .Where(u => u.LastKnownLocation!.Distance(task.Location!) <= radiusInMeters) // Use ! to tell compiler you checked it
+    .OrderBy(u => u.LastKnownLocation!.Distance(task.Location!))
+    .ToListAsync();
 
     return Ok(nearbyWorkers);
 }
