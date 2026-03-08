@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components.Web;
 using VanguardFSM.Web.Components;
+using NetTopologySuite.IO.Converters; // This requires the package above
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,15 +9,19 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // 2. Register HttpClient for the Dashboard
-// This solves the 'No registered service of type HttpClient' error
 builder.Services.AddScoped(sp => new HttpClient 
 { 
     BaseAddress = new Uri("http://localhost:5085/") 
 });
 
+// 3. Configure JSON to handle NetTopologySuite Points
+builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+{
+    options.SerializerOptions.Converters.Add(new GeoJsonConverterFactory());
+});
+
 var app = builder.Build();
 
-// 3. Configure the HTTP request pipeline
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -27,8 +32,6 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseAntiforgery();
 
-// 4. Map the root App component
-// Ensure 'App' exists in your VanguardFSM.Web.Components namespace
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

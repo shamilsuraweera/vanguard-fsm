@@ -1,45 +1,52 @@
 @page "/dashboard"
 @using VanguardFSM.Shared.Models
 @using VanguardFSM.Web.Components
+@using System.Text.Json
+@using NetTopologySuite.IO.Converters
 @inject HttpClient Http
 
-<h3>Dispatcher Dashboard</h3>
+<div class="container mt-4">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body d-flex justify-content-between align-items-center">
+            <h3 class="card-title mb-0">Dispatcher Dashboard</h3>
+            <div class="badge @(dbStatus == "Online" ? "bg-success" : "bg-danger") p-2">
+                DB Status: @dbStatus | Tasks: @taskCount
+            </div>
+        </div>
+    </div>
 
-@if (tasks == null)
-{
-    <p><em>Loading tasks...</em></p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var task in tasks)
-            {
+    @if (tasks == null)
+    {
+        <div class="spinner-border text-primary" role="status"></div>
+    }
+    else
+    {
+        <table class="table table-hover">
+            <thead class="table-dark">
                 <tr>
-                    <td>@task.Title</td>
-                    <td>@task.Status</td>
-                    <td>
-                        <button class="btn btn-primary" @onclick="() => DispatchTask(task.Id)">
-                            Find Nearby Workers
-                        </button>
-                    </td>
+                    <th>Task Name</th>
+                    <th>Status</th>
+                    <th>Action</th>
                 </tr>
-            }
-        </tbody>
-    </table>
-}
-
-<div class="alert @(dbStatus == "Online" ? "alert-success" : "alert-danger") shadow-sm">
-    <strong>DB Status:</strong> @dbStatus | 
-    <strong>Live Tasks in DB:</strong> @taskCount | 
-    <small>Last Checked: @lastChecked</small>
+            </thead>
+            <tbody>
+                @foreach (var task in tasks)
+                {
+                    <tr>
+                        <td>@task.Title</td>
+                        <td><span class="badge bg-info">@task.Status</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => DispatchTask(task.Id)">
+                                Find Nearby Workers
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    
+    <MapView @ref="mapComponent" />
 </div>
 
 @code {
@@ -49,26 +56,42 @@ else
     private int taskCount = 0;
     private string lastChecked = "";
 
+    // IMPORTANT: The dictionary required to read spatial data
+    private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions 
+    { 
+        PropertyNameCaseInsensitive = true 
+    };
+
     protected override async Task OnInitializedAsync()
     {
+        // Add the GeoJSON converter before making any HTTP requests
+        _jsonOptions.Converters.Add(new GeoJsonConverterFactory());
+
         await RefreshDbStatus();
-        // Fetch tasks from your API
-        tasks = await Http.GetFromJsonAsync<List<TaskItem>>("api/Dispatch/tasks");
+        
+        try 
+        {
+            // Fetch tasks using the explicit JSON options
+            tasks = await Http.GetFromJsonAsync<List<TaskItem>>("api/Dispatch/tasks", _jsonOptions);
+        } 
+        catch (Exception ex) 
+        {
+            Console.WriteLine($"Error fetching tasks: {ex.Message}");
+        }
     }
 
     private async Task DispatchTask(int taskId)
     {
-        // 1. Call the API to find workers within 5km (5000 meters)
-        var nearbyWorkers = await Http.GetFromJsonAsync<List<User>>($"api/Dispatch/suggest-workers/{taskId}/5000");
+        // Fetch workers using the explicit JSON options
+        var nearbyWorkers = await Http.GetFromJsonAsync<List<User>>($"api/Dispatch/suggest-workers/{taskId}/5000", _jsonOptions);
 
         if (nearbyWorkers != null && mapComponent != null)
         {
             foreach (var worker in nearbyWorkers)
             {
-                // 2. Plot them on the map
-                // Note: We use .X for Longitude and .Y for Latitude from NetTopologySuite
                 if (worker.LastKnownLocation != null)
                 {
+                    // Add markers to the map
                     await mapComponent.AddWorkerMarker(
                         worker.LastKnownLocation.Y, 
                         worker.LastKnownLocation.X, 
@@ -78,6 +101,7 @@ else
             }
         }
     }
+
     private async Task RefreshDbStatus()
     {
         try {

@@ -1,6 +1,7 @@
 using VanguardFSM.API.Data;
 using Microsoft.EntityFrameworkCore;
 using VanguardFSM.API.Hubs;
+using NetTopologySuite.IO.Converters;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,9 +10,10 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
     x => x.UseNetTopologySuite()));
 
-// 2. JSON Configuration for Geometry (The 'Infinity' fix)
+// 2. JSON Configuration for Geometry (The GeoJSON translation fix)
 builder.Services.AddControllers().AddJsonOptions(options => {
-    options.JsonSerializerOptions.Converters.Add(new NetTopologySuite.IO.Converters.GeoJsonConverterFactory());
+    // Translates spatial coordinates into readable JSON strings
+    options.JsonSerializerOptions.Converters.Add(new GeoJsonConverterFactory());
     options.JsonSerializerOptions.NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals;
 });
 
@@ -28,6 +30,7 @@ builder.Services.AddCors(options => {
 var app = builder.Build();
 
 app.UseCors("AllowAll");
+
 if (app.Environment.IsDevelopment()) {
     app.UseSwagger();
     app.UseSwaggerUI();
