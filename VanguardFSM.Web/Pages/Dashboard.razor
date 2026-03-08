@@ -1,0 +1,52 @@
+@page "/dashboard"
+@using VanguardFSM.Shared.Models
+@inject HttpClient Http
+
+<h3>Dispatcher Dashboard</h3>
+
+@if (tasks == null)
+{
+    <p><em>Loading tasks...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var task in tasks)
+            {
+                <tr>
+                    <td>@task.Title</td>
+                    <td>@task.Status</td>
+                    <td>
+                        <button class="btn btn-primary" @onclick="() => DispatchTask(task.Id)">
+                            Find Nearby Workers
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<TaskItem>? tasks;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // In a real scenario, you'd have a GET /api/tasks endpoint
+        // For now, we are focusing on the functional flow
+    }
+
+    private void DispatchTask(int id)
+    {
+        // This will navigate to a search page or open a modal
+        Console.WriteLine($"Dispatching task {id}");
+    }
+}

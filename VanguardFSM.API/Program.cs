@@ -32,6 +32,10 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals;
     });
 
+builder.Services.AddScoped(sp => new HttpClient { 
+    BaseAddress = new Uri("http://localhost:5085") 
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
