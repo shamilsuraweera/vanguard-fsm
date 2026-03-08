@@ -4,6 +4,7 @@ public enum ServiceStatus
 {
     Incoming = 0,    // Customer submitted
     Dispatching = 1, // Admin reviewing
+    Dispatched, // Task assigned to a worker via SignalR
     Assigned = 2,    // Worker selected
     EnRoute = 3,     // Worker traveling
     OnSite = 4,      // Work started
