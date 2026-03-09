@@ -1,0 +1,36 @@
+@using Microsoft.AspNetCore.SignalR.Client
+@using VanguardFSM.Shared.Models
+
+@inject HttpClient Http
+
+<div class="mobile-container">
+    @if (incomingTask != null)
+    {
+        <div class="alert-card">
+            <h4>New Assignment!</h4>
+            <p>@incomingTask.Title</p>
+            <button class="btn btn-success" @onclick="Accept">Accept</button>
+        </div>
+    }
+</div>
+
+@code {
+    private HubConnection? hub;
+    private TaskItem? incomingTask;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hub = new HubConnectionBuilder()
+            .WithUrl("http://localhost:5085/notificationHub")
+            .Build();
+
+        hub.On<TaskItem>("NewTaskAssigned", (task) => {
+            incomingTask = task;
+            StateHasChanged();
+        });
+
+        await hub.StartAsync();
+    }
+
+    private async Task Accept() { /* Logic to change status to InProgress */ }
+}
