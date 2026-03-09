@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="VanguardFSM.API/VanguardFSM.API.csproj" />
+  <Project Path="VanguardFSM.Mobile/VanguardFSM.Mobile.csproj" />
   <Project Path="VanguardFSM.RazorLib/VanguardFSM.RazorLib.csproj" />
   <Project Path="VanguardFSM.Shared/VanguardFSM.Shared.csproj" />
   <Project Path="VanguardFSM.Web/VanguardFSM.Web.csproj" />
