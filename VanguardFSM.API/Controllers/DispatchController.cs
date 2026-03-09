@@ -86,4 +86,29 @@ public class DispatchController : ControllerBase
             return StatusCode(500, new { Status = "Offline", Error = ex.Message });
         }
     }
+    // 5. Accept Task: Worker accepts the task, updating status to InProgress
+    [HttpPost("accept-task/{taskId}")]
+    public async Task<IActionResult> AcceptTask(int taskId)
+    {
+    var task = await _context.Tasks.FindAsync(taskId);
+
+    if (task == null) 
+        return NotFound("Task not found.");
+
+    // Development Check: Ensure the task was actually dispatched first
+    if (task.Status != VanguardFSM.Shared.Enums.ServiceStatus.Dispatched)
+    {
+        return BadRequest("Task cannot be accepted unless it is in 'Dispatched' status.");
+    }
+
+    // Update to 'InProgress'
+    task.Status = VanguardFSM.Shared.Enums.ServiceStatus.InProgress;
+    
+    await _context.SaveChangesAsync();
+
+    return Ok(new { 
+        Message = $"Task {taskId} is now In Progress.",
+        NewStatus = task.Status.ToString() 
+    });
+}
 }
