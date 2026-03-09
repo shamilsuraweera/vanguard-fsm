@@ -1,0 +1,79 @@
+@page "/worker-dashboard"
+@using VanguardFSM.Shared.Models
+@using VanguardFSM.Shared.Enums
+@using System.Text.Json
+@using NetTopologySuite.IO.Converters
+@inject HttpClient Http
+
+<div class="container mt-4">
+    <div class="card shadow-sm mb-4 bg-dark text-white">
+        <div class="card-body">
+            <h3 class="card-title">Worker Portal</h3>
+            <p class="mb-0">Manage your assigned service requests.</p>
+        </div>
+    </div>
+
+    @if (assignedTasks == null)
+    {
+        <div class="d-flex align-items-center">
+            <strong>Loading your tasks...</strong>
+            <div class="spinner-border ms-auto" role="status" aria-hidden="true"></div>
+        </div>
+    }
+    else if (!assignedTasks.Any(t => t.Status == ServiceStatus.Dispatched))
+    {
+        <div class="alert alert-info">No new tasks waiting for acceptance.</div>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var task in assignedTasks.Where(t => t.Status == ServiceStatus.Dispatched))
+            {
+                <div class="col-md-6 mb-3">
+                    <div class="card border-primary h-100">
+                        <div class="card-header bg-primary text-white">New Assignment</div>
+                        <div class="card-body">
+                            <h5 class="card-title">@task.Title</h5>
+                            <p class="card-text">@task.Description</p>
+                            <button class="btn btn-success w-100" @onclick="() => AcceptTask(task.Id)">
+                                Accept & Start Work
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<TaskItem>? assignedTasks;
+    private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions 
+    { 
+        PropertyNameCaseInsensitive = true 
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _jsonOptions.Converters.Add(new GeoJsonConverterFactory());
+        await LoadTasks();
+    }
+
+    private async Task LoadTasks()
+    {
+        // For development, we fetch all tasks. In a real app, you'd filter by WorkerId.
+        assignedTasks = await Http.GetFromJsonAsync<List<TaskItem>>("api/Dispatch/tasks", _jsonOptions);
+    }
+
+    private async Task AcceptTask(int taskId)
+    {
+        var response = await Http.PostAsync($"api/Dispatch/accept-task/{taskId}", null);
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Refresh local UI to show the task is no longer in the "New" list
+            await LoadTasks();
+            StateHasChanged();
+        }
+    }
+}

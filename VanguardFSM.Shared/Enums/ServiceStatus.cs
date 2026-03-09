@@ -8,7 +8,8 @@ public enum ServiceStatus
     Assigned = 2,    // Worker selected
     EnRoute = 3,     // Worker traveling
     OnSite = 4,      // Work started
-    Verification = 5,// Customer reviewing
-    Finalizing = 6,  // Payment/Log processing
-    Completed = 7    // Archived
+    InProgress = 5, // Work ongoing
+    Verification = 6,// Customer reviewing
+    Finalizing = 7,  // Payment/Log processing
+    Completed = 8    // Archived
 }
