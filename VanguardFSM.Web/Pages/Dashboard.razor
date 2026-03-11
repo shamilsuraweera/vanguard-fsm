@@ -1,5 +1,6 @@
 @page "/dashboard"
 @using VanguardFSM.Shared.Models
+@using VanguardFSM.Shared.Enums
 @using VanguardFSM.Web.Components
 @using System.Text.Json
 @using NetTopologySuite.IO.Converters
@@ -8,28 +9,41 @@
 @inject IJSRuntime JS
 @implements IDisposable
 
-<div class="container mt-4">
+<div class="container-fluid mt-4">
     <div class="card shadow-sm mb-4">
         <div class="card-body d-flex justify-content-between align-items-center">
-            <h3 class="card-title mb-0">Dispatcher Dashboard</h3>
-            <div class="badge @(dbStatus == "Online" ? "bg-success" : "bg-danger") p-2">
-                DB Status: @dbStatus | Tasks: @taskCount
+            <h3 class="card-title mb-0 text-primary fw-bold">Dispatcher Dashboard</h3>
+            <div class="d-flex gap-2">
+                <span class="badge @(dbStatus == "Online" ? "bg-success" : "bg-danger") p-2 shadow-sm">
+                    DB: @dbStatus
+                </span>
+                <span class="badge bg-dark p-2 shadow-sm">
+                    Total Tasks: @taskCount
+                </span>
             </div>
         </div>
     </div>
 
     @if (tasks == null)
     {
-        <div class="spinner-border text-primary" role="status"></div>
+        <div class="text-center my-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Synchronizing with SQL Server...</p>
+        </div>
     }
     else
     {
         <div class="mb-4">
-            <KanbanBoard Tasks="tasks" OnTaskSelected="FindWorkersForTask" />
+            <KanbanBoard Tasks="tasks" 
+                         OnTaskSelected="FindWorkersForTask" 
+                         OnStatusChanged="UpdateTaskStatus" />
         </div>
     }
     
-    <div class="mt-4 border rounded shadow-sm overflow-hidden">
+    <div class="mt-4 border rounded shadow-sm overflow-hidden bg-white">
+        <div class="bg-light p-2 border-bottom">
+            <small class="text-secondary fw-bold text-uppercase">Geographic Dispatch Map</small>
+        </div>
         <MapView @ref="mapComponent" />
     </div>
 </div>
@@ -38,18 +52,13 @@
     private MapView? mapComponent;
     private List<TaskItem>? tasks;
     
-    // Status tracking variables
     private string dbStatus = "Checking...";
     private int taskCount = 0;
     private string lastChecked = "";
-    
-    // Tracks which task is currently being assigned
     private int selectedTaskId; 
     
-    // JavaScript reference for callbacks
     private DotNetObjectReference<Dashboard>? _dotNetRef;
 
-    // JSON configuration required to read SQL spatial data
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions 
     { 
         PropertyNameCaseInsensitive = true 
@@ -57,11 +66,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // 1. Initialize JSON converters and JS references
         _jsonOptions.Converters.Add(new GeoJsonConverterFactory());
         _dotNetRef = DotNetObjectReference.Create(this);
 
-        // 2. Load initial data
         await RefreshDbStatus();
         await LoadTasks();
     }
@@ -71,6 +78,7 @@
         try 
         {
             tasks = await Http.GetFromJsonAsync<List<TaskItem>>("api/Dispatch/tasks", _jsonOptions);
+            taskCount = tasks?.Count ?? 0;
         }
         catch (Exception ex)
         {
@@ -86,8 +94,6 @@
             if (result != null) 
             {
                 dbStatus = result.Status;
-                taskCount = result.TotalTasks;
-                lastChecked = result.Timestamp;
             }
         } 
         catch 
@@ -98,7 +104,6 @@
 
     private async Task FindWorkersForTask(int taskId)
     {
-        // Remember the ID so we know what task to assign later
         selectedTaskId = taskId; 
         
         var nearbyWorkers = await Http.GetFromJsonAsync<List<User>>($"api/Dispatch/suggest-workers/{taskId}/5000", _jsonOptions);
@@ -109,7 +114,6 @@
             {
                 if (worker.LastKnownLocation != null)
                 {
-                    // Pass the worker data and the C# reference to our JavaScript map file
                     await JS.InvokeVoidAsync("mapFunctions.addWorkerMarker", 
                         worker.LastKnownLocation.Y, 
                         worker.LastKnownLocation.X, 
@@ -121,34 +125,37 @@
         }
     }
 
-    [JSInvokable] // This exposes the method so JavaScript can click it
+    private async Task UpdateTaskStatus((int TaskId, ServiceStatus NewStatus) updateData)
+    {
+        var response = await Http.PutAsJsonAsync($"api/Dispatch/update-status/{updateData.TaskId}", updateData.NewStatus);
+
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadTasks(); 
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable] 
     public async Task HandleAssignTask(int workerId)
     {
         if (selectedTaskId == 0) return;
 
-        // Call the API to update the database and trigger SignalR
         var response = await Http.PostAsync($"api/Dispatch/assign-task/{selectedTaskId}/{workerId}", null);
 
         if (response.IsSuccessStatusCode)
         {
-            // Reset the selection and refresh the table
             selectedTaskId = 0;
             await LoadTasks();
-            StateHasChanged(); // Force the UI to update
-        }
-        else 
-        {
-            Console.WriteLine("Failed to assign task.");
+            StateHasChanged();
         }
     }
 
-    // Clean up memory when the component is destroyed
     public void Dispose()
     {
         _dotNetRef?.Dispose();
     }
 
-    // Helper class for the DB check
     public class DbCheckResponse 
     {
         public string Status { get; set; } = "";

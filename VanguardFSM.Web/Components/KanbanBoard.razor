@@ -7,7 +7,7 @@
         <div class="kanban-column mx-2 bg-light rounded shadow-sm p-2" style="min-width: 300px;">
             <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
                 <h5 class="mb-0 text-uppercase small fw-bold text-secondary">@status</h5>
-                <span class="badge bg-secondary">@GetTaskCount(status)</span>
+                <span class="badge bg-secondary">@Tasks.Count(t => t.Status == status)</span>
             </div>
 
             <div class="kanban-tasks" style="min-height: 100px;">
@@ -31,11 +31,55 @@
     }
 </div>
 
+<div class="kanban-container d-flex overflow-auto pb-3">
+    @foreach (ServiceStatus status in Enum.GetValues(typeof(ServiceStatus)))
+    {
+        <div class="kanban-column mx-2 bg-light rounded shadow-sm p-2" 
+             style="min-width: 300px;"
+             ondragover="event.preventDefault();"
+             @ondrop="() => HandleDrop(status)">
+            
+            <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                <h5 class="mb-0 text-uppercase small fw-bold text-secondary">@status</h5>
+                <span class="badge bg-secondary">@Tasks.Count(t => t.Status == status)</span>
+            </div>
+
+            <div class="kanban-tasks" style="min-height: 200px;">
+                @foreach (var task in Tasks.Where(t => t.Status == status))
+                {
+                    <div class="card mb-2 shadow-sm border-0 border-start border-4 @GetStatusBorder(status)"
+                         draggable="true"
+                         @ondragstart="() => draggedTaskId = task.Id">
+                        <div class="card-body p-2">
+                            <h6 class="card-title mb-1" style="font-size: 0.9rem;">@task.Title</h6>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2" 
+                                    @onclick="() => OnTaskSelected.InvokeAsync(task.Id)">
+                                Find Workers
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
 @code {
     [Parameter] public List<TaskItem> Tasks { get; set; } = new();
     [Parameter] public EventCallback<int> OnTaskSelected { get; set; }
+    [Parameter] public EventCallback<(int TaskId, ServiceStatus NewStatus)> OnStatusChanged { get; set; }
 
-    private int GetTaskCount(ServiceStatus status) => Tasks.Count(t => t.Status == status);
+    private int draggedTaskId;
+
+    private async Task HandleDrop(ServiceStatus newStatus)
+    {
+        if (draggedTaskId != 0)
+        {
+            // Trigger the parent component to update the database
+            await OnStatusChanged.InvokeAsync((draggedTaskId, newStatus));
+            draggedTaskId = 0;
+        }
+    }
 
     private string GetStatusBorder(ServiceStatus status) => status switch
     {
