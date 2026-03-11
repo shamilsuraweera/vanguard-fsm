@@ -20,36 +20,13 @@
 
     @if (tasks == null)
     {
-        <div class="d-flex align-items-center text-primary">
-            <strong>Loading tasks...</strong>
-            <div class="spinner-border ms-auto" role="status" aria-hidden="true"></div>
-        </div>
+        <div class="spinner-border text-primary" role="status"></div>
     }
     else
     {
-        <table class="table table-hover border shadow-sm">
-            <thead class="table-dark">
-                <tr>
-                    <th>Task Name</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var task in tasks)
-                {
-                    <tr class="@(selectedTaskId == task.Id ? "table-primary" : "")">
-                        <td>@task.Title</td>
-                        <td><span class="badge bg-info">@task.Status</span></td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" @onclick="() => FindWorkersForTask(task.Id)">
-                                <i class="bi bi-search"></i> Find Nearby Workers
-                            </button>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+        <div class="mb-4">
+            <KanbanBoard Tasks="tasks" OnTaskSelected="FindWorkersForTask" />
+        </div>
     }
     
     <div class="mt-4 border rounded shadow-sm overflow-hidden">
