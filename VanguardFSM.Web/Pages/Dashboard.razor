@@ -3,12 +3,21 @@
 @using VanguardFSM.Shared.Enums
 @using VanguardFSM.Web.Components
 @using Microsoft.JSInterop
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager Navigation
 @inject HttpClient Http
 @inject IJSRuntime JS
-@implements IDisposable
+@implements IAsyncDisposable 
 
 <div class="container-fluid mt-4">
-    <h3 class="text-primary fw-bold mb-4">Dispatcher Dashboard</h3>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="text-primary fw-bold mb-0">Dispatcher Dashboard</h3>
+        
+        @* Functionality: Confirms the Dispatcher is successfully connected to the real-time Hub *@
+        <span class="badge @(hubConnection?.State == HubConnectionState.Connected ? "bg-success" : "bg-danger") p-2 shadow-sm">
+            SignalR: @(hubConnection?.State == HubConnectionState.Connected ? "Connected" : "Disconnected")
+        </span>
+    </div>
 
     @if (tasks == null)
     {
@@ -37,10 +46,21 @@
     private List<TaskItem>? tasks;
     private int selectedTaskId;
     private DotNetObjectReference<Dashboard>? _dotNetRef;
+    
+    // Development: Added HubConnection so the Dispatcher can push events out.
+    private HubConnection? hubConnection;
 
     protected override async Task OnInitializedAsync()
     {
         _dotNetRef = DotNetObjectReference.Create(this);
+        
+        // Development: Establish connection to the Hub.
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("http://localhost:5085/notificationHub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        await hubConnection.StartAsync();
         await LoadTasks();
     }
 
@@ -65,7 +85,6 @@
         selectedTaskId = taskId;
         var workers = await Http.GetFromJsonAsync<List<User>>($"api/Dispatch/suggest-workers/{taskId}/5000");
         
-        // Safety Check: Ensure map and dotNetRef are not null before calling
         if (workers != null && mapComponent != null && _dotNetRef != null)
         {
             foreach (var w in workers)
@@ -78,18 +97,42 @@
         }
     }
 
+    // Functionality: Triggered by JavaScript when the 'Assign Task' button in the map popup is clicked.
     [JSInvokable]
     public async Task HandleAssignTask(int workerId)
     {
         if (selectedTaskId == 0) return;
+        
+        // 1. Update the Database via the REST API
         var response = await Http.PostAsync($"api/Dispatch/assign-task/{selectedTaskId}/{workerId}", null);
+        
         if (response.IsSuccessStatusCode)
         {
+            // Development: Grab the title of the task we just assigned to send in our payload.
+            var assignedTask = tasks?.FirstOrDefault(t => t.Id == selectedTaskId);
+            string title = assignedTask?.Title ?? "New Task";
+
+            // 2. Broadcast the Real-Time Alert via SignalR
+            // Functionality: This instantly tells the Worker Dashboard to refresh its screen.
+            if (hubConnection is not null && hubConnection.State == HubConnectionState.Connected)
+            {
+                await hubConnection.InvokeAsync("SendTaskAssignment", workerId, title);
+            }
+
+            // 3. Clean up the Dispatcher UI
             selectedTaskId = 0;
             await LoadTasks();
             StateHasChanged();
         }
     }
 
-    public void Dispose() => _dotNetRef?.Dispose();
+    // Development: Safely close connections and memory references when navigating away.
+    public async ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
 }
