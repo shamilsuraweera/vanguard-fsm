@@ -1,34 +1,28 @@
 using Microsoft.AspNetCore.Components.Web;
 using VanguardFSM.Web.Components;
-using NetTopologySuite.IO.Converters; // This requires the package above
+using NetTopologySuite.IO.Converters;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Add Blazor Server services
+// 1. Add Interactive Server Services
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// 2. Register HttpClient for the Dashboard
+// 2. Setup JSON options for the HttpClient
+var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+jsonOptions.Converters.Add(new GeoJsonConverterFactory());
+
 builder.Services.AddScoped(sp => new HttpClient 
 { 
     BaseAddress = new Uri("http://localhost:5085/") 
 });
 
-// 3. Configure JSON to handle NetTopologySuite Points
-builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
-{
-    options.SerializerOptions.Converters.Add(new GeoJsonConverterFactory());
-});
+// 3. Make these options available for manual parsing
+builder.Services.AddSingleton(jsonOptions);
 
 var app = builder.Build();
 
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    app.UseHsts();
-}
-
-app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseAntiforgery();
 
