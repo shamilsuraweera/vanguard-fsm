@@ -1,0 +1,47 @@
+@using VanguardFSM.Shared.Models
+@using System.ComponentModel.DataAnnotations
+
+<EditForm Model="UpdateModel" OnValidSubmit="HandleSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger small" />
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Work Notes</label>
+        @* Functionality: Allows workers to describe the fix or obstacles encountered. *@
+        <InputTextArea @bind-Value="UpdateModel.Notes" class="form-control" rows="3" placeholder="Describe the work performed..." />
+        <ValidationMessage For="@(() => UpdateModel.Notes)" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Parts Used</label>
+        @* Development: Using a simple text area for now; later this can be a multi-select list. *@
+        <InputText @bind-Value="UpdateModel.PartsUsed" class="form-control" placeholder="e.g. 2x Filter, 1m Copper Pipe" />
+    </div>
+
+    <div class="d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-light" @onclick="OnCancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Work Update</button>
+    </div>
+</EditForm>
+
+@code {
+    [Parameter] public ServiceUpdateModel UpdateModel { get; set; } = new();
+    [Parameter] public EventCallback<ServiceUpdateModel> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private async Task HandleSubmit()
+    {
+        // Development: Only triggers if DataAnnotations (Required, MaxLength, etc.) pass.
+        await OnSave.InvokeAsync(UpdateModel);
+    }
+
+    // Development: This DTO ensures we only send the necessary fields back to the API.
+    public class ServiceUpdateModel
+    {
+        [Required(ErrorMessage = "Please provide notes about the service.")]
+        [MinLength(10, ErrorMessage = "Notes must be at least 10 characters.")]
+        public string Notes { get; set; } = string.Empty;
+
+        public string? PartsUsed { get; set; }
+    }
+}
