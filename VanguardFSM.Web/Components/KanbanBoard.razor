@@ -1,5 +1,6 @@
 @using VanguardFSM.Shared.Models
 @using VanguardFSM.Shared.Enums
+@using Microsoft.AspNetCore.Components.Authorization
 
 <div class="kanban-container d-flex overflow-auto pb-3">
     @foreach (ServiceStatus status in Enum.GetValues(typeof(ServiceStatus)))
@@ -25,10 +26,14 @@
                             <p class="card-text text-muted mb-2" style="font-size: 0.8rem;">
                                 @(task.Description?.Length > 50 ? task.Description[..50] + "..." : task.Description)
                             </p>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2" 
-                                    @onclick="() => OnTaskSelected.InvokeAsync(task.Id)">
-                                Find Workers
-                            </button>
+                            <AuthorizeView Roles="Admin">
+                                <Authorized>
+                                     <button class="btn btn-sm btn-outline-primary py-0 px-2" 
+                                        @onclick="() => OnTaskSelected.InvokeAsync(task.Id)">
+                                    Find Workers
+                                </button>
+                                </Authorized>
+                            </AuthorizeView>
                         </div>
                     </div>
                 }

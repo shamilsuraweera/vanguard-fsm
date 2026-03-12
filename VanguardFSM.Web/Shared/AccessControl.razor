@@ -1,0 +1,22 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Development: AuthorizeView checks the 'Claims' of the logged-in user. *@
+<AuthorizeView Roles="Admin">
+    <Authorized>
+        @* Functionality: Only Admins see high-level controls. *@
+        <div class="admin-controls border-start border-warning ps-3">
+            <span class="badge bg-warning text-dark mb-2">Admin Actions</span>
+            @ChildContent
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        @* Functionality: Workers see a read-only or limited view. *@
+        <div class="text-muted small italic">
+            <i class="bi bi-lock"></i> You do not have permission to modify this task.
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}
