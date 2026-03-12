@@ -1,0 +1,16 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Authorization
+
+@* Development: AuthorizeView is the standard Blazor way to handle RBAC. *@
+<AuthorizeView Roles="Admin">
+    <Authorized>
+        @ChildContent
+    </Authorized>
+    <NotAuthorized>
+        <span class="badge bg-light text-muted border">Read-Only</span>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}
