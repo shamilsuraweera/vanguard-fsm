@@ -2,45 +2,29 @@
 @using VanguardFSM.Shared.Models
 @using VanguardFSM.Shared.Enums
 @using VanguardFSM.Web.Components
-@using System.Text.Json
-@using NetTopologySuite.IO.Converters
 @using Microsoft.JSInterop
 @inject HttpClient Http
 @inject IJSRuntime JS
 @implements IDisposable
 
 <div class="container-fluid mt-4">
-    <div class="card shadow-sm mb-4">
-        <div class="card-body d-flex justify-content-between align-items-center">
-            <h3 class="card-title mb-0 text-primary fw-bold">Dispatcher Dashboard</h3>
-            <div class="d-flex gap-2">
-                <span class="badge @(dbStatus == "Online" ? "bg-success" : "bg-danger") p-2 shadow-sm">
-                    DB: @dbStatus
-                </span>
-                <span class="badge bg-dark p-2 shadow-sm">
-                    Total Tasks: @taskCount
-                </span>
-            </div>
-        </div>
-    </div>
+    <h3 class="text-primary fw-bold mb-4">Dispatcher Dashboard</h3>
 
     @if (tasks == null)
     {
         <div class="text-center my-5">
             <div class="spinner-border text-primary" role="status"></div>
-            <p class="mt-2 text-muted">Synchronizing with SQL Server...</p>
+            <p class="mt-2 text-muted">Connecting to Service...</p>
         </div>
     }
     else
     {
-        <div class="mb-4">
-            <KanbanBoard Tasks="tasks" 
-                         OnTaskSelected="FindWorkersForTask" 
-                         OnStatusChanged="UpdateTaskStatus" />
-        </div>
+        <KanbanBoard Tasks="tasks" 
+                     OnTaskSelected="FindWorkersForTask" 
+                     OnStatusChanged="UpdateTaskStatus" />
     }
-    
-    <div class="mt-4 border rounded shadow-sm overflow-hidden bg-white">
+
+    <div class="mt-4 border rounded shadow-sm bg-white overflow-hidden">
         <div class="bg-light p-2 border-bottom">
             <small class="text-secondary fw-bold text-uppercase">Geographic Dispatch Map</small>
         </div>
@@ -51,98 +35,54 @@
 @code {
     private MapView? mapComponent;
     private List<TaskItem>? tasks;
-    
-    private string dbStatus = "Checking...";
-    private int taskCount = 0;
-    private string lastChecked = "";
-    private int selectedTaskId; 
-    
+    private int selectedTaskId;
     private DotNetObjectReference<Dashboard>? _dotNetRef;
-
-    private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions 
-    { 
-        PropertyNameCaseInsensitive = true 
-    };
 
     protected override async Task OnInitializedAsync()
     {
-        _jsonOptions.Converters.Add(new GeoJsonConverterFactory());
         _dotNetRef = DotNetObjectReference.Create(this);
-
-        await RefreshDbStatus();
         await LoadTasks();
     }
 
     private async Task LoadTasks()
     {
-        try 
-        {
-            tasks = await Http.GetFromJsonAsync<List<TaskItem>>("api/Dispatch/tasks", _jsonOptions);
-            taskCount = tasks?.Count ?? 0;
+        try {
+            tasks = await Http.GetFromJsonAsync<List<TaskItem>>("api/Dispatch/tasks");
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error loading tasks: {ex.Message}");
-        }
-    }
-
-    private async Task RefreshDbStatus()
-    {
-        try 
-        {
-            var result = await Http.GetFromJsonAsync<DbCheckResponse>("api/Dispatch/db-check");
-            if (result != null) 
-            {
-                dbStatus = result.Status;
-            }
-        } 
-        catch 
-        {
-            dbStatus = "Offline";
-        }
-    }
-
-    private async Task FindWorkersForTask(int taskId)
-    {
-        selectedTaskId = taskId; 
-        
-        var nearbyWorkers = await Http.GetFromJsonAsync<List<User>>($"api/Dispatch/suggest-workers/{taskId}/5000", _jsonOptions);
-
-        if (nearbyWorkers != null)
-        {
-            foreach (var worker in nearbyWorkers)
-            {
-                if (worker.LastKnownLocation != null)
-                {
-                    await JS.InvokeVoidAsync("mapFunctions.addWorkerMarker", 
-                        worker.LastKnownLocation.Y, 
-                        worker.LastKnownLocation.X, 
-                        worker.Name, 
-                        worker.Id, 
-                        _dotNetRef);
-                }
-            }
+        catch {
+            tasks = new List<TaskItem>(); 
         }
     }
 
     private async Task UpdateTaskStatus((int TaskId, ServiceStatus NewStatus) updateData)
     {
-        var response = await Http.PutAsJsonAsync($"api/Dispatch/update-status/{updateData.TaskId}", updateData.NewStatus);
+        await Http.PutAsJsonAsync($"api/Dispatch/update-status/{updateData.TaskId}", updateData.NewStatus);
+        await LoadTasks();
+    }
 
-        if (response.IsSuccessStatusCode)
+    private async Task FindWorkersForTask(int taskId)
+    {
+        selectedTaskId = taskId;
+        var workers = await Http.GetFromJsonAsync<List<User>>($"api/Dispatch/suggest-workers/{taskId}/5000");
+        
+        // Safety Check: Ensure map and dotNetRef are not null before calling
+        if (workers != null && mapComponent != null && _dotNetRef != null)
         {
-            await LoadTasks(); 
-            StateHasChanged();
+            foreach (var w in workers)
+            {
+                if (w.LastKnownLocation != null)
+                {
+                    await mapComponent.AddWorkerMarker(w.LastKnownLocation.Y, w.LastKnownLocation.X, w.Name, w.Id, _dotNetRef);
+                }
+            }
         }
     }
 
-    [JSInvokable] 
+    [JSInvokable]
     public async Task HandleAssignTask(int workerId)
     {
         if (selectedTaskId == 0) return;
-
         var response = await Http.PostAsync($"api/Dispatch/assign-task/{selectedTaskId}/{workerId}", null);
-
         if (response.IsSuccessStatusCode)
         {
             selectedTaskId = 0;
@@ -151,15 +91,5 @@
         }
     }
 
-    public void Dispose()
-    {
-        _dotNetRef?.Dispose();
-    }
-
-    public class DbCheckResponse 
-    {
-        public string Status { get; set; } = "";
-        public int TotalTasks { get; set; }
-        public string Timestamp { get; set; } = "";
-    }
+    public void Dispose() => _dotNetRef?.Dispose();
 }

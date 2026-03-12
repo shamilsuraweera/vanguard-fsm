@@ -1,22 +1,22 @@
+@using Microsoft.JSInterop
+@using VanguardFSM.Web.Pages
 @inject IJSRuntime JS
 
 <div id="map" style="height: 400px; width: 100%; border-radius: 8px;"></div>
 
 @code {
-    [Parameter] public double Lat { get; set; } = 51.5074;
-    [Parameter] public double Lng { get; set; } = -0.1278;
-
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            await JS.InvokeVoidAsync("mapInterop.initialize", "map", Lat, Lng);
+            // Initializes the Leaflet map in the 'map' div
+            await JS.InvokeVoidAsync("mapFunctions.initialize", "map", 51.505, -0.09);
         }
     }
 
-    public async Task AddWorkerMarker(double lat, double lng, string name, bool isClose)
+    public async Task AddWorkerMarker(double lat, double lng, string name, int id, DotNetObjectReference<Dashboard> reference)
     {
-        string color = isClose ? "green" : "red";
-        await JS.InvokeVoidAsync("mapInterop.addMarker", lat, lng, name, color);
+        // Passes the C# reference to JS so the button can call back
+        await JS.InvokeVoidAsync("mapFunctions.addWorkerMarker", lat, lng, name, id, reference);
     }
 }
