@@ -34,14 +34,4 @@
         // Development: Only triggers if DataAnnotations (Required, MaxLength, etc.) pass.
         await OnSave.InvokeAsync(UpdateModel);
     }
-
-    // Development: This DTO ensures we only send the necessary fields back to the API.
-    public class ServiceUpdateModel
-    {
-        [Required(ErrorMessage = "Please provide notes about the service.")]
-        [MinLength(10, ErrorMessage = "Notes must be at least 10 characters.")]
-        public string Notes { get; set; } = string.Empty;
-
-        public string? PartsUsed { get; set; }
-    }
 }

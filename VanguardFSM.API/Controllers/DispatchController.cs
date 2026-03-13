@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VanguardFSM.API.Data;
+using VanguardFSM.Shared.Models;
+using VanguardFSM.Shared.Enums;
 using Microsoft.AspNetCore.SignalR;
 using VanguardFSM.API.Hubs;
-using VanguardFSM.Shared.Models;
-using NetTopologySuite.Geometries;
 
 namespace VanguardFSM.API.Controllers;
 
@@ -21,94 +21,71 @@ public class DispatchController : ControllerBase
         _hubContext = hubContext;
     }
 
-    // 1. Fetch all tasks for the Dashboard table
+    // Functionality: Returns all tasks for the Kanban board
     [HttpGet("tasks")]
-    public async Task<IActionResult> GetTasks()
+    public async Task<ActionResult<IEnumerable<TaskItem>>> GetTasks()
     {
-        var tasks = await _context.Tasks.ToListAsync();
-        return Ok(tasks);
+        return await _context.Tasks.ToListAsync();
     }
 
-    // 2. Spatial Query: Find workers within a specific radius of a task
-    [HttpGet("suggest-workers/{taskId}/{radiusInMeters}")]
-    public async Task<IActionResult> GetSuggestedWorkers(int taskId, double radiusInMeters)
+    // Functionality: Updates status when a card is dragged in Kanban
+    [HttpPut("update-status/{id}")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] ServiceStatus newStatus)
     {
-        var task = await _context.Tasks.FindAsync(taskId);
-        if (task?.Location == null) return NotFound("Task location not set.");
+        var task = await _context.Tasks.FindAsync(id);
+        if (task == null) return NotFound();
 
-        var nearbyWorkers = await _context.Users
-            .Where(u => u.Role == "Worker" && u.IsAvailable && u.LastKnownLocation != null)
-            .Where(u => u.LastKnownLocation!.Distance(task.Location!) <= radiusInMeters) 
-            .OrderBy(u => u.LastKnownLocation!.Distance(task.Location!))
-            .ToListAsync();
-
-        return Ok(nearbyWorkers);
+        task.Status = newStatus;
+        await _context.SaveChangesAsync();
+        return NoContent();
     }
 
-    // 3. Assign Task: Update status and notify worker via SignalR
+    // Functionality: Assigns a worker to a task and triggers a SignalR alert
     [HttpPost("assign-task/{taskId}/{workerId}")]
     public async Task<IActionResult> AssignTask(int taskId, int workerId)
     {
         var task = await _context.Tasks.FindAsync(taskId);
-        var worker = await _context.Users.FindAsync(workerId);
+        if (task == null) return NotFound();
 
-        if (task == null || worker == null) return NotFound("Task or Worker not found.");
-
-        task.Status = VanguardFSM.Shared.Enums.ServiceStatus.Dispatched;
+        task.Status = ServiceStatus.Dispatched;
+        // Development: In a real system, you would link the Task to the WorkerId here
         await _context.SaveChangesAsync();
 
-        await _hubContext.Clients.All.SendAsync("NewTaskAssigned", new {
-            TaskTitle = task.Title,
-            Description = task.Description,
-            Location = task.Location
-        });
+        // Broadcast to SignalR Hub so the worker's dashboard refreshes
+        await _hubContext.Clients.All.SendAsync("NewTaskAssigned", new { WorkerId = workerId, Title = task.Title });
 
-        return Ok($"Task {taskId} successfully dispatched to {worker.Name}");
+        return Ok();
     }
 
-    // 4. Health Check: Verify Database and API connectivity
-    [HttpGet("db-check")]
-    public async Task<IActionResult> CheckDb()
-    {
-        try 
-        {
-            bool canConnect = await _context.Database.CanConnectAsync();
-            var taskCount = await _context.Tasks.CountAsync();
-            
-            return Ok(new { 
-                Status = "Online", 
-                TotalTasks = taskCount, 
-                Timestamp = DateTime.Now.ToShortTimeString() 
-            });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { Status = "Offline", Error = ex.Message });
-        }
-    }
-    // 5. Accept Task: Worker accepts the task, updating status to InProgress
+    // Functionality: Called when a worker clicks "Accept Job"
     [HttpPost("accept-task/{taskId}")]
     public async Task<IActionResult> AcceptTask(int taskId)
     {
-    var task = await _context.Tasks.FindAsync(taskId);
+        var task = await _context.Tasks.FindAsync(taskId);
+        if (task == null) return NotFound();
 
-    if (task == null) 
-        return NotFound("Task not found.");
-
-    // Development Check: Ensure the task was actually dispatched first
-    if (task.Status != VanguardFSM.Shared.Enums.ServiceStatus.Dispatched)
-    {
-        return BadRequest("Task cannot be accepted unless it is in 'Dispatched' status.");
+        task.Status = ServiceStatus.InProgress;
+        await _context.SaveChangesAsync();
+        return Ok();
     }
 
-    // Update to 'InProgress'
-    task.Status = VanguardFSM.Shared.Enums.ServiceStatus.InProgress;
-    
-    await _context.SaveChangesAsync();
+    // Task 4.1: New Endpoint for Work Updates
+    // Functionality: Receives notes/parts and marks the job as Completed.
+    [HttpPost("update-work/{taskId}")]
+    public async Task<IActionResult> UpdateWorkOrder(int taskId, [FromBody] ServiceUpdateModel update)
+    {
+        var task = await _context.Tasks.FindAsync(taskId);
+        if (task == null) return NotFound();
 
-    return Ok(new { 
-        Message = $"Task {taskId} is now In Progress.",
-        NewStatus = task.Status.ToString() 
-    });
-}
+        // Development: Appending the new report to the existing description
+        task.Description += $"\n\n--- Work Log ({DateTime.Now:g}) ---\nNotes: {update.Notes}\nParts: {update.PartsUsed}";
+        task.Status = ServiceStatus.Completed;
+
+        await _context.SaveChangesAsync();
+        
+        // Notify Dispatcher via SignalR that the job is done
+        await _hubContext.Clients.All.SendAsync("TaskCompleted", taskId);
+
+        return Ok();
+    }
 }
