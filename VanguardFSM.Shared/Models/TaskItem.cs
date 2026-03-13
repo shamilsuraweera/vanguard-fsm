@@ -13,4 +13,6 @@ public class TaskItem
     public ServiceStatus Status { get; set; } = ServiceStatus.Incoming;
     
     public Point? Location { get; set; }
+
+    public int? AssignedWorkerId { get; set; }
 }

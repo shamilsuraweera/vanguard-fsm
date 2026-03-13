@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.Authorization;
 
 namespace VanguardFSM.API.Hubs;
 
 // Development: Inheriting from 'Hub' gives this class the ability to manage WebSocket connections, 
 // group users, and broadcast messages to connected clients.
+[Authorize]
 public class NotificationHub : Hub
 {
     // Functionality: Allows specific types of users (e.g., "Technicians") to join a dedicated channel.
