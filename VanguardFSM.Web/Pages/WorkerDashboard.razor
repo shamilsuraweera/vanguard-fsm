@@ -106,13 +106,33 @@
             StateHasChanged();
         });
 
-        await hubConnection.StartAsync();
+        try
+        {
+            await hubConnection.StartAsync();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            // ignore until login page exists
+        }
+
         await LoadTasks();
     }
 
     private async Task LoadTasks()
     {
-        assignedTasks = await Http.GetFromJsonAsync<List<TaskItem>>("api/Dispatch/tasks", _jsonOptions);
+        try
+        {
+            assignedTasks = await Http.GetFromJsonAsync<List<TaskItem>>("api/Dispatch/tasks", _jsonOptions);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            // Not logged in yet; just pretend there are no tasks
+            assignedTasks = new List<TaskItem>();
+        }
+        catch
+        {
+            assignedTasks = new List<TaskItem>();
+        }
     }
 
     private async Task AcceptTask(int taskId)

@@ -1,0 +1,32 @@
+@page "/"
+@inject NavigationManager Navigation
+
+<PageTitle>VanguardFSM Mobile</PageTitle>
+
+<div class="mobile-container">
+    <div class="text-center mt-4">
+        <h2 class="text-primary mb-3">VanguardFSM</h2>
+        <p class="mb-4">Field Service Mobile App</p>
+
+        <div class="d-grid gap-2">
+            <button class="btn btn-primary" @onclick="NavigateToDashboard">
+                <i class="bi bi-kanban-fill me-2"></i>Dashboard
+            </button>
+            <button class="btn btn-outline-primary" @onclick="NavigateToWorkerDashboard">
+                <i class="bi bi-tools me-2"></i>Worker Portal
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private void NavigateToDashboard()
+    {
+        Navigation.NavigateTo("/dashboard");
+    }
+
+    private void NavigateToWorkerDashboard()
+    {
+        Navigation.NavigateTo("/worker-dashboard");
+    }
+}

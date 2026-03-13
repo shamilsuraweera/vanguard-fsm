@@ -60,7 +60,15 @@
             .WithAutomaticReconnect()
             .Build();
 
-        await hubConnection.StartAsync();
+        try
+        {
+            await hubConnection.StartAsync();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            // no auth token yet; ignore failure for now
+        }
+
         await LoadTasks();
     }
 
@@ -68,6 +76,11 @@
     {
         try {
             tasks = await Http.GetFromJsonAsync<List<TaskItem>>("api/Dispatch/tasks");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            // not authenticated; show empty list
+            tasks = new List<TaskItem>(); 
         }
         catch {
             tasks = new List<TaskItem>(); 
