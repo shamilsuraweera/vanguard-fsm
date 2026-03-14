@@ -40,7 +40,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 // 4. Services
-builder.Services.AddScoped<DispatchService>();
+builder.Services.AddScoped<IDispatchService, DispatchService>();
 
 // 5. Health Checks
 builder.Services.AddHealthChecks();

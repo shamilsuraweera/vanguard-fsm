@@ -7,7 +7,7 @@ using VanguardFSM.API.Hubs;
 
 namespace VanguardFSM.API.Services;
 
-public class DispatchService
+public class DispatchService : IDispatchService
 {
     private readonly AppDbContext _context;
     private readonly IHubContext<NotificationHub> _hubContext;
@@ -81,6 +81,18 @@ public class DispatchService
         task.Status = ServiceStatus.InProgress;
         await _context.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<IEnumerable<User>> SuggestWorkersAsync(int taskId, double radiusMeters)
+    {
+        var task = await _context.Tasks.FindAsync(taskId);
+        if (task?.Location == null)
+            return Enumerable.Empty<User>();
+
+        return await _context.Users
+            .Where(u => u.IsAvailable && u.LastKnownLocation != null
+                && u.LastKnownLocation.IsWithinDistance(task.Location, radiusMeters))
+            .ToListAsync();
     }
 
     public async Task<bool> UpdateWorkOrderAsync(int taskId, ServiceUpdateModel update)

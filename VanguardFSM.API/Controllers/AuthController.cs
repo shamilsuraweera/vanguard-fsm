@@ -4,7 +4,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using VanguardFSM.API.Data;
-using VanguardFSM.Shared.Models;
+using VanguardFSM.Shared.Models; // LoginRequest and LoginResponse live in Shared
 
 namespace VanguardFSM.API.Controllers;
 
@@ -48,12 +48,6 @@ public class AuthController : ControllerBase
             expires: DateTime.Now.AddHours(1),
             signingCredentials: creds);
 
-        return Ok(new { token = new JwtSecurityTokenHandler().WriteToken(token) });
+        return Ok(new LoginResponse { Token = new JwtSecurityTokenHandler().WriteToken(token) });
     }
-}
-
-public class LoginRequest
-{
-    public string Username { get; set; } = string.Empty;
-    public string Password { get; set; } = string.Empty;
 }
