@@ -4,9 +4,11 @@
 @using System.Text.Json
 @using NetTopologySuite.IO.Converters
 @using Microsoft.AspNetCore.SignalR.Client
+@using System.Net.Http.Headers
 @using VanguardFSM.Web.Components
 @inject HttpClient Http
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
 <div class="container mt-4">
@@ -115,7 +117,17 @@
             // ignore until login page exists
         }
 
+        await EnsureAuthTokenAsync();
         await LoadTasks();
+    }
+
+    private async Task EnsureAuthTokenAsync()
+    {
+        var token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+        if (!string.IsNullOrEmpty(token))
+        {
+            Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
     }
 
     private async Task LoadTasks()

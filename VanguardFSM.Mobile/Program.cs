@@ -6,6 +6,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Add HttpClient for LoginForm and API calls
+builder.Services.AddHttpClient("api", client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5085/");
+});
+
+builder.Services.AddTransient(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("api"));
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
