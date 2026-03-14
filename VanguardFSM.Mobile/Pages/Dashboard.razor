@@ -1,0 +1,195 @@
+@page "/dashboard"
+@using VanguardFSM.Shared.Models
+@using VanguardFSM.Shared.Enums
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.Net.Http.Headers
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="container mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="text-primary fw-bold mb-0">Dispatch Console</h4>
+        <span class="badge @(hubConnection?.State == HubConnectionState.Connected ? "bg-success" : "bg-danger") p-2">
+            @(hubConnection?.State == HubConnectionState.Connected ? "Live" : "Offline")
+        </span>
+    </div>
+
+    @if (tasks == null)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="text-muted mt-2">Loading tasks...</p>
+        </div>
+    }
+    else if (!tasks.Any())
+    {
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+            <p class="mt-2">No tasks yet.</p>
+        </div>
+    }
+    else
+    {
+        @* Status filter pills *@
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <button class="btn btn-sm @(activeFilter == null ? "btn-primary" : "btn-outline-secondary")"
+                    @onclick="() => activeFilter = null">
+                All <span class="badge bg-white text-dark ms-1">@tasks.Count</span>
+            </button>
+            @foreach (var status in Enum.GetValues<ServiceStatus>())
+            {
+                var count = tasks.Count(t => t.Status == status);
+                if (count > 0)
+                {
+                    <button class="btn btn-sm @(activeFilter == status ? "btn-primary" : "btn-outline-secondary")"
+                            @onclick="() => activeFilter = status">
+                        @status <span class="badge bg-white text-dark ms-1">@count</span>
+                    </button>
+                }
+            }
+        </div>
+
+        @* Task cards *@
+        @foreach (var task in FilteredTasks)
+        {
+            <div class="card mb-2 shadow-sm border-start @GetStatusBorder(task.Status)" style="border-left-width: 4px">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="fw-bold mb-1">@task.Title</h6>
+                            <p class="text-muted small mb-2">@(task.Description?.Length > 80 ? task.Description[..80] + "..." : task.Description)</p>
+                        </div>
+                        <span class="badge @GetStatusBadge(task.Status)">@task.Status</span>
+                    </div>
+
+                    @if (task.AssignedWorkerId.HasValue)
+                    {
+                        <small class="text-muted"><i class="bi bi-person-fill"></i> Worker #@task.AssignedWorkerId</small>
+                    }
+
+                    @* Status transition buttons — dispatcher actions *@
+                    <div class="d-flex gap-2 mt-2">
+                        @if (task.Status == ServiceStatus.Incoming)
+                        {
+                            <button class="btn btn-sm btn-outline-info flex-fill"
+                                    @onclick="() => UpdateStatus(task.Id, ServiceStatus.Dispatching)">
+                                Start Review
+                            </button>
+                        }
+                        @if (task.Status == ServiceStatus.Dispatching)
+                        {
+                            <button class="btn btn-sm btn-info text-white flex-fill"
+                                    @onclick="() => UpdateStatus(task.Id, ServiceStatus.Dispatched)">
+                                Mark Dispatched
+                            </button>
+                        }
+                        @if (task.Status == ServiceStatus.Verification)
+                        {
+                            <button class="btn btn-sm btn-outline-success flex-fill"
+                                    @onclick="() => UpdateStatus(task.Id, ServiceStatus.Finalizing)">
+                                Approve
+                            </button>
+                        }
+                        @if (task.Status == ServiceStatus.Finalizing)
+                        {
+                            <button class="btn btn-sm btn-success flex-fill"
+                                    @onclick="() => UpdateStatus(task.Id, ServiceStatus.Completed)">
+                                Complete
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<TaskItem>? tasks;
+    private HubConnection? hubConnection;
+    private ServiceStatus? activeFilter;
+
+    private IEnumerable<TaskItem> FilteredTasks =>
+        activeFilter == null ? tasks! : tasks!.Where(t => t.Status == activeFilter);
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("http://localhost:5085/notificationHub"), opts =>
+            {
+                opts.AccessTokenProvider = async () => await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+            })
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<object>("TaskStatusUpdated", async (_) =>
+        {
+            await LoadTasks();
+            StateHasChanged();
+        });
+
+        try { await hubConnection.StartAsync(); }
+        catch (Exception) { /* API down or unauthenticated */ }
+
+        await EnsureAuthTokenAsync();
+        await LoadTasks();
+    }
+
+    private async Task EnsureAuthTokenAsync()
+    {
+        var token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+        if (!string.IsNullOrEmpty(token))
+        {
+            Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+    }
+
+    private async Task LoadTasks()
+    {
+        try
+        {
+            tasks = await Http.GetFromJsonAsync<List<TaskItem>>("api/Dispatch/tasks");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            tasks = new List<TaskItem>();
+        }
+        catch
+        {
+            tasks = new List<TaskItem>();
+        }
+    }
+
+    private async Task UpdateStatus(int taskId, ServiceStatus newStatus)
+    {
+        await Http.PutAsJsonAsync($"api/Dispatch/update-status/{taskId}", newStatus);
+        await LoadTasks();
+    }
+
+    private string GetStatusBorder(ServiceStatus status) => status switch
+    {
+        ServiceStatus.Incoming => "border-warning",
+        ServiceStatus.Dispatching => "border-secondary",
+        ServiceStatus.Dispatched => "border-info",
+        ServiceStatus.InProgress => "border-primary",
+        ServiceStatus.Completed => "border-success",
+        _ => "border-secondary"
+    };
+
+    private string GetStatusBadge(ServiceStatus status) => status switch
+    {
+        ServiceStatus.Incoming => "bg-warning text-dark",
+        ServiceStatus.Dispatching => "bg-secondary",
+        ServiceStatus.Dispatched => "bg-info",
+        ServiceStatus.InProgress => "bg-primary",
+        ServiceStatus.Completed => "bg-success",
+        _ => "bg-secondary"
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null) await hubConnection.DisposeAsync();
+    }
+}

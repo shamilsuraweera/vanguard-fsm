@@ -50,7 +50,7 @@
             @foreach (var task in assignedTasks.Where(t => t.Status == ServiceStatus.Dispatched || t.Status == ServiceStatus.InProgress))
             {
                 <div class="col-md-6 mb-3">
-                    <div class="card shadow-sm border-0 border-start border-4 @(task.Status == ServiceStatus.InProgress ? "border-primary" : "border-info")">
+                    <div class="card shadow-sm border-0 border-start @(task.Status == ServiceStatus.InProgress ? "border-primary" : "border-info")" style="border-left-width: 4px">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
                                 <h5 class="card-title fw-bold">@task.Title</h5>

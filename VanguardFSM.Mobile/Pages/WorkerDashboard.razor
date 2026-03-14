@@ -1,0 +1,174 @@
+@page "/worker-dashboard"
+@using VanguardFSM.Shared.Models
+@using VanguardFSM.Shared.Enums
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.Net.Http.Headers
+@using VanguardFSM.RazorLib.Components
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="container mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="fw-bold mb-0">My Jobs</h4>
+            <small class="@(hubConnection?.State == HubConnectionState.Connected ? "text-success" : "text-danger")">
+                @(hubConnection?.State == HubConnectionState.Connected ? "● Connected" : "● Reconnecting...")
+            </small>
+        </div>
+
+        @if (newNotification)
+        {
+            <span class="badge bg-warning text-dark p-2 animate__animated animate__fadeInRight">
+                New Job!
+            </span>
+        }
+    </div>
+
+    @if (activeTaskId != null)
+    {
+        <div class="mb-3">
+            <h5 class="text-secondary mb-2">Complete Work Report</h5>
+            <ServiceEntryForm
+                UpdateModel="updateModel"
+                OnSave="HandleSaveUpdate"
+                OnCancel="() => activeTaskId = null" />
+        </div>
+    }
+    else if (assignedTasks == null)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="text-muted mt-2">Loading jobs...</p>
+        </div>
+    }
+    else if (!assignedTasks.Any(t => t.Status == ServiceStatus.Dispatched || t.Status == ServiceStatus.InProgress))
+    {
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-clipboard-check" style="font-size: 2rem;"></i>
+            <p class="mt-2">No active jobs. You're all caught up!</p>
+        </div>
+    }
+    else
+    {
+        @foreach (var task in assignedTasks.Where(t => t.Status == ServiceStatus.Dispatched || t.Status == ServiceStatus.InProgress))
+        {
+            <div class="card mb-3 shadow-sm border-start @(task.Status == ServiceStatus.InProgress ? "border-primary" : "border-info")" style="border-left-width: 4px">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h6 class="fw-bold mb-1">@task.Title</h6>
+                        <span class="badge @(task.Status == ServiceStatus.InProgress ? "bg-primary" : "bg-info")">@task.Status</span>
+                    </div>
+                    <p class="text-muted small mb-2">@task.Description</p>
+
+                    @if (task.Status == ServiceStatus.Dispatched)
+                    {
+                        <button class="btn btn-success w-100" @onclick="() => AcceptTask(task.Id)">
+                            <i class="bi bi-check-circle me-1"></i> Accept & Start Job
+                        </button>
+                    }
+                    else if (task.Status == ServiceStatus.InProgress)
+                    {
+                        <button class="btn btn-primary w-100" @onclick="() => StartWorkReport(task.Id)">
+                            <i class="bi bi-pencil-square me-1"></i> Log Work & Complete
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<TaskItem>? assignedTasks;
+    private HubConnection? hubConnection;
+    private bool newNotification;
+    private int? activeTaskId;
+    private ServiceUpdateModel updateModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("http://localhost:5085/notificationHub"), opts =>
+            {
+                opts.AccessTokenProvider = async () => await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+            })
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<object>("NewTaskAssigned", async (_) =>
+        {
+            newNotification = true;
+            await LoadTasks();
+            StateHasChanged();
+            await Task.Delay(4000);
+            newNotification = false;
+            StateHasChanged();
+        });
+
+        try { await hubConnection.StartAsync(); }
+        catch (Exception) { /* API down or unauthenticated */ }
+
+        await EnsureAuthTokenAsync();
+        await LoadTasks();
+    }
+
+    private async Task EnsureAuthTokenAsync()
+    {
+        var token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+        if (!string.IsNullOrEmpty(token))
+        {
+            Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+    }
+
+    private async Task LoadTasks()
+    {
+        try
+        {
+            assignedTasks = await Http.GetFromJsonAsync<List<TaskItem>>("api/Dispatch/tasks");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            assignedTasks = new List<TaskItem>();
+        }
+        catch
+        {
+            assignedTasks = new List<TaskItem>();
+        }
+    }
+
+    private async Task AcceptTask(int taskId)
+    {
+        var response = await Http.PostAsync($"api/Dispatch/accept-task/{taskId}", null);
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadTasks();
+        }
+    }
+
+    private void StartWorkReport(int taskId)
+    {
+        activeTaskId = taskId;
+        updateModel = new ServiceUpdateModel();
+    }
+
+    private async Task HandleSaveUpdate(ServiceUpdateModel model)
+    {
+        if (activeTaskId == null) return;
+
+        var response = await Http.PostAsJsonAsync($"api/Dispatch/update-work/{activeTaskId}", model);
+        if (response.IsSuccessStatusCode)
+        {
+            activeTaskId = null;
+            updateModel = new();
+            await LoadTasks();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null) await hubConnection.DisposeAsync();
+    }
+}
