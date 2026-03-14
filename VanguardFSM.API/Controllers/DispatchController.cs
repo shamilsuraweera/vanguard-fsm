@@ -14,10 +14,10 @@ namespace VanguardFSM.API.Controllers;
 [Route("api/[controller]")]
 public class DispatchController : ControllerBase
 {
-    private readonly DispatchService _dispatchService;
+    private readonly IDispatchService _dispatchService;
     private readonly ILogger<DispatchController> _logger;
 
-    public DispatchController(DispatchService dispatchService, ILogger<DispatchController> logger)
+    public DispatchController(IDispatchService dispatchService, ILogger<DispatchController> logger)
     {
         _dispatchService = dispatchService;
         _logger = logger;
@@ -90,6 +90,23 @@ public class DispatchController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error accepting task {TaskId}", taskId);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    // Functionality: Returns workers within radiusMeters of the task's location
+    [HttpGet("suggest-workers/{taskId}/{radiusMeters}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<IEnumerable<User>>> SuggestWorkers(int taskId, double radiusMeters)
+    {
+        try
+        {
+            var workers = await _dispatchService.SuggestWorkersAsync(taskId, radiusMeters);
+            return Ok(workers);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error suggesting workers for task {TaskId}", taskId);
             return StatusCode(500, "Internal server error");
         }
     }
