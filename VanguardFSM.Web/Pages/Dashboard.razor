@@ -9,6 +9,8 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable 
 
+@using System.Net.Http.Headers
+
 <div class="container-fluid mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h3 class="text-primary fw-bold mb-0">Dispatcher Dashboard</h3>
@@ -69,7 +71,17 @@
             // no auth token yet; ignore failure for now
         }
 
+        await EnsureAuthTokenAsync();
         await LoadTasks();
+    }
+
+    private async Task EnsureAuthTokenAsync()
+    {
+        var token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+        if (!string.IsNullOrEmpty(token))
+        {
+            Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
     }
 
     private async Task LoadTasks()
