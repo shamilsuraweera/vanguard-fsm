@@ -58,7 +58,12 @@
         
         // Development: Establish connection to the Hub.
         hubConnection = new HubConnectionBuilder()
-            .WithUrl(Navigation.ToAbsoluteUri("http://localhost:5085/notificationHub"))
+            .WithUrl(Navigation.ToAbsoluteUri("http://localhost:5085/notificationHub"), opts =>
+            {
+                // Passes the JWT from localStorage as a Bearer token on the WebSocket handshake.
+                // Without this, [Authorize] on NotificationHub rejects the connection with 401.
+                opts.AccessTokenProvider = async () => await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+            })
             .WithAutomaticReconnect()
             .Build();
 
@@ -66,9 +71,9 @@
         {
             await hubConnection.StartAsync();
         }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        catch (Exception)
         {
-            // no auth token yet; ignore failure for now
+            // Connection failed (API down or not yet logged in); UI shows Disconnected badge.
         }
 
         await EnsureAuthTokenAsync();
